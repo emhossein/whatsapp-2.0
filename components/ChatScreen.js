@@ -9,12 +9,15 @@ import { useCollection } from 'react-firebase-hooks/firestore';
 import Message from './Message';
 import InsertEmoticonIcon from '@material-ui/icons/InsertEmoticon';
 import MicIcon from '@material-ui/icons/Mic';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import firebase from 'firebase/compat/app';
+import getRecipientEmail from '../utils/getRecipientEmail';
+import TimeAgo from 'timeago-react';
 
 const ChatScreen = ({ chat, messages }) => {
   const [user] = useAuthState(auth);
   const router = useRouter();
+  const endOfMsgRef = useRef(null);
   const [messagesSnapshot] = useCollection(
     db
       .collection('chats')
@@ -24,6 +27,19 @@ const ChatScreen = ({ chat, messages }) => {
   );
 
   const [input, setInput] = useState('');
+
+  const [recipientSnapshot] = useCollection(
+    db
+      .collection('users')
+      .where('email', '==', getRecipientEmail(chat.users, user))
+  );
+
+  const scrollToBottom = () => {
+    endOfMsgRef.current.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
 
   const showMessages = () => {
     if (messagesSnapshot) {
@@ -62,16 +78,35 @@ const ChatScreen = ({ chat, messages }) => {
     });
 
     setInput('');
+    scrollToBottom();
   };
+
+  const recipient = recipientSnapshot?.docs?.[0]?.data();
+  const recEmail = getRecipientEmail(chat.users, user);
 
   return (
     <Container>
       <Header>
-        <Avatar />
+        {recipient ? (
+          <Avatar src={recipient?.photoUrl} />
+        ) : (
+          <Avatar>{recEmail[0].toUpperCase()}</Avatar>
+        )}
 
         <HeaderInformation>
-          <h3>Rec Email</h3>
-          <p>Last Seen : </p>
+          <h3>{recEmail}</h3>
+          {recipientSnapshot ? (
+            <p>
+              Last Seen:{' '}
+              {recipient?.lastSeen?.toDate() ? (
+                <TimeAgo dateTime={recipient?.lastSeen?.toDate()} />
+              ) : (
+                'Unavailable'
+              )}
+            </p>
+          ) : (
+            <p>Loading Last Seen...</p>
+          )}
         </HeaderInformation>
         <HeaderIcons>
           <IconButton>
@@ -85,7 +120,7 @@ const ChatScreen = ({ chat, messages }) => {
 
       <MessageContainer>
         {showMessages()}
-        <EndOfMessage />
+        <EndOfMessage ref={endOfMsgRef} />
       </MessageContainer>
       <InputContainer>
         <InsertEmoticonIcon />
@@ -137,7 +172,9 @@ const MessageContainer = styled.div`
   min-height: 90vh;
 `;
 
-const EndOfMessage = styled.div``;
+const EndOfMessage = styled.div`
+  margin-bottom: 50px;
+`;
 
 const InputContainer = styled.form`
   display: flex;
